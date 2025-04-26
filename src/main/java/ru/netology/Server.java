@@ -9,20 +9,23 @@ import java.net.Socket;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 
 public class Server {
     private final List<String> validPaths;
-    private final int port;
     private final ExecutorService threadPool = Executors.newFixedThreadPool(64);
+    private final int port;
 
     public Server(List<String> validPaths, int port) {
         this.validPaths = validPaths;
         this.port = port;
     }
+
 
     public void start() {
         try(final var serverSocket = new ServerSocket(port)){
