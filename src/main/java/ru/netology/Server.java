@@ -1,33 +1,29 @@
 package ru.netology;
 
-import java.io.BufferedOutputStream;
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
+import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.LocalDateTime;
-import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
-
 public class Server {
-    private final List<String> validPaths;
-    private final int port;
-    private final ExecutorService threadPool = Executors.newFixedThreadPool(64);
+    private final int TREAD_POOL_SIZE = 64;
+    private final ExecutorService threadPool = Executors.newFixedThreadPool(TREAD_POOL_SIZE);
+    private final Map<String, Map<String, Handler>> handlers = new ConcurrentHashMap<>();
 
-    public Server(List<String> validPaths, int port) {
-        this.validPaths = validPaths;
-        this.port = port;
+    public void addHandler(String method, String path, Handler handler) {
+        handlers
+                .computeIfAbsent(method, key -> new HashMap<>())
+                .put(path, handler);
     }
 
-    public void start() {
-        try(final var serverSocket = new ServerSocket(port)){
+    public void listen(int port) {
+        try (final var serverSocket = new ServerSocket(port)) {
             System.out.println("Сервер запущен, порт: " + port);
-            while(true) {
+            while (true) {
                 final var socket = serverSocket.accept();
                 threadPool.submit(() -> handleConnection(socket));
             }
@@ -36,61 +32,57 @@ public class Server {
         }
     }
 
-    public void handleConnection(Socket socket){
-        try(
+    public void handleConnection(Socket socket) {
+        try (
+                socket;
                 final var in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
                 final var out = new BufferedOutputStream(socket.getOutputStream());
-        ){
+        ) {
             final var requestLine = in.readLine();
+            if (requestLine == null || requestLine.isBlank()) {
+                return;
+            }
 
             final var parts = requestLine.split(" ");
             if (parts.length != 3) {
                 return;
             }
 
+            final var method = parts[0];
             final var path = parts[1];
 
-            if (!validPaths.contains(path)) {
-                out.write((
-                        "HTTP/1.1 404 Not Found\r\n" +
-                                "Content-Length: 0\r\n" +
-                                "Connection: close\r\n" +
-                                "\r\n"
-                ).getBytes());
-                out.flush();
-                return;
+            Map<String, String> headers = new ConcurrentHashMap<>();
+            String line;
+            while (!(line = in.readLine()).equals("")) {
+                final var separatorIndex = line.indexOf(": ");
+                if (separatorIndex != -1) {
+                    final var headerName = line.substring(0, separatorIndex);
+                    final var headerValue = line.substring(separatorIndex + 2);
+                    headers.put(headerName, headerValue);
+                }
+            }
+            InputStream body = null;
+            if ("POST".equalsIgnoreCase(method)) {
+                StringBuilder bodyBuilder = new StringBuilder();
+                while (in.ready()) {
+                    bodyBuilder.append((char) in.read());
+                }
+                body = new ByteArrayInputStream(bodyBuilder.toString().getBytes());
             }
 
-            final var filePath = Path.of(".", "public", path);
-            final var mimeType = Files.probeContentType(filePath);
+            Request request = new Request(method, path, headers, body);
 
-            if (path.equals("/classic.html")) {
-                // Особый случай: нужно заменить {time} на текущее время
-                final var template = Files.readString(filePath);
-                final var content = template.replace("{time}", LocalDateTime.now().toString()).getBytes();
-                out.write((
-                        "HTTP/1.1 200 OK\r\n" +
-                                "Content-Type: " + mimeType + "\r\n" +
-                                "Content-Length: " + content.length + "\r\n" +
-                                "Connection: close\r\n" +
-                                "\r\n"
-                ).getBytes());
-                out.write(content);
-                out.flush();
+            Handler handler = handlers.getOrDefault(method, new ConcurrentHashMap<>()).get(path);
+
+            if (handler != null) {
+                handler.handle(request, out);
             } else {
-                // Обычный случай: просто отправляем файл
-                final var length = Files.size(filePath);
-                out.write((
-                        "HTTP/1.1 200 OK\r\n" +
-                                "Content-Type: " + mimeType + "\r\n" +
-                                "Content-Length: " + length + "\r\n" +
-                                "Connection: close\r\n" +
-                                "\r\n"
-                ).getBytes());
-                Files.copy(filePath, out);
+                out.write(("HTTP/1.1 404 Not Found\r\n" +
+                        "Content-Length: 0\r\n" +
+                        "Connection: close\r\n" +
+                        "\r\n").getBytes());
                 out.flush();
             }
-
         } catch (IOException e) {
             e.printStackTrace();
         }
