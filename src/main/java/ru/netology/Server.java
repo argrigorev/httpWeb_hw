@@ -49,7 +49,9 @@ public class Server {
             }
 
             final var method = parts[0];
-            final var path = parts[1];
+            final var fullPath = parts[1];
+            final var queryIndex = fullPath.indexOf('?');
+            final var cleanPath = queryIndex != -1 ? fullPath.substring(0, queryIndex) : fullPath;
 
             Map<String, String> headers = new ConcurrentHashMap<>();
             String line;
@@ -70,9 +72,9 @@ public class Server {
                 body = new ByteArrayInputStream(bodyBuilder.toString().getBytes());
             }
 
-            Request request = new Request(method, path, headers, body);
+            Request request = new Request(method, fullPath, headers, body);
 
-            Handler handler = handlers.getOrDefault(method, new ConcurrentHashMap<>()).get(path);
+            Handler handler = handlers.getOrDefault(method, new ConcurrentHashMap<>()).get(cleanPath);
 
             if (handler != null) {
                 handler.handle(request, out);
