@@ -3,6 +3,7 @@ package ru.netology;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,13 +62,19 @@ public class Server {
                     headers.put(headerName, headerValue);
                 }
             }
+
             InputStream body = null;
             if ("POST".equalsIgnoreCase(method)) {
-                StringBuilder bodyBuilder = new StringBuilder();
-                while (in.ready()) {
-                    bodyBuilder.append((char) in.read());
+                int contentLength = 0;
+                contentLength = Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
+
+                char[] bodyChars = new char[contentLength];
+
+                if (contentLength > 0) {
+                    in.read(bodyChars);
                 }
-                body = new ByteArrayInputStream(bodyBuilder.toString().getBytes());
+                String bodyText = new String(bodyChars);
+                body = new ByteArrayInputStream(bodyText.getBytes(StandardCharsets.UTF_8));
             }
 
             Request request = new Request(method, path, headers, body);

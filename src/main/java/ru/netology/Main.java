@@ -1,8 +1,8 @@
 package ru.netology;
 
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
+import java.util.List;
+import java.util.Map;
 
 public class Main {
     public static void main(String[] args) {
@@ -25,20 +25,25 @@ public class Main {
         });
 
         server.addHandler("POST", "/messages", ((request, responseStream) -> {
-            StringBuilder bodyContent = new StringBuilder();
-            try (BufferedReader reader = new BufferedReader(new InputStreamReader(request.getBody()))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    bodyContent.append(line);
+            try {
+                StringBuilder responseContent = new StringBuilder("Received POST data:\n");
+
+                for (Map.Entry<String, List<String>> entry : request.getPostParams().entrySet()) {
+                    for (String value : entry.getValue()) {
+                        responseContent
+                                .append(entry.getKey())
+                                .append(" = ")
+                                .append(value)
+                                .append("\n");
+                    }
                 }
 
-                String responseContent = "Received POST data: " + bodyContent.toString();
+                byte[] contentBytes = responseContent.toString().getBytes();
                 responseStream.write("HTTP/1.1 200 OK\r\n".getBytes());
                 responseStream.write("Content-Type: text/plain\r\n".getBytes());
-                responseStream.write("Content-Length: ".getBytes());
-                responseStream.write(String.valueOf(responseContent.length()).getBytes());
-                responseStream.write("\r\n\r\n".getBytes());
-                responseStream.write(responseContent.getBytes());
+                responseStream.write(("Content-Length: " + contentBytes.length + "\r\n").getBytes());
+                responseStream.write("\r\n".getBytes());
+                responseStream.write(contentBytes);
                 responseStream.flush();
             } catch (Exception e) {
                 e.printStackTrace();
