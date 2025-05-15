@@ -1,8 +1,12 @@
 package ru.netology;
 
+import org.apache.commons.fileupload.FileItem;
+
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+
 
 public class Main {
     public static void main(String[] args) {
@@ -28,17 +32,30 @@ public class Main {
             try {
                 StringBuilder responseContent = new StringBuilder("Received POST data:\n");
 
-                for (Map.Entry<String, List<String>> entry : request.getPostParams().entrySet()) {
-                    for (String value : entry.getValue()) {
-                        responseContent
-                                .append(entry.getKey())
-                                .append(" = ")
-                                .append(value)
-                                .append("\n");
+                Map<String, String> formParams = request.getFormParams();
+                if (!formParams.isEmpty()) {
+                    responseContent.append("Form parameters:\n");
+                    for (Map.Entry<String, String> entry : formParams.entrySet()) {
+                        responseContent.append(entry.getKey()).append(": ").append(entry.getValue()).append("\n");
+                    }
+                    responseContent.append("\n");
+                }
+
+                List<Part> parts = request.getParts();
+                if (!parts.isEmpty()) {
+                    responseContent.append("Files:\n");
+                    for (Part part : parts) {
+                        responseContent.append("Name: ").append(part.getName()).append("\n");
+                        if (part.getFilename() != null) {
+                            responseContent.append("Filename: ").append(part.getFilename()).append("\n");
+                            responseContent.append("Content-Type: ").append(part.getContentType()).append("\n");
+                            responseContent.append("Size: ").append(part.getContent().length).append(" bytes\n");
+                        }
+                        responseContent.append("\n");
                     }
                 }
 
-                byte[] contentBytes = responseContent.toString().getBytes();
+                byte[] contentBytes = responseContent.toString().getBytes(StandardCharsets.UTF_8);
                 responseStream.write("HTTP/1.1 200 OK\r\n".getBytes());
                 responseStream.write("Content-Type: text/plain\r\n".getBytes());
                 responseStream.write(("Content-Length: " + contentBytes.length + "\r\n").getBytes());
@@ -53,5 +70,3 @@ public class Main {
         server.listen(9999);
     }
 }
-
-

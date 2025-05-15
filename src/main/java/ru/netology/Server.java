@@ -3,7 +3,6 @@ package ru.netology;
 import java.io.*;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -63,21 +62,22 @@ public class Server {
                 }
             }
 
-            InputStream body = null;
+            byte[] bodyBytes = new byte[0];
             if ("POST".equalsIgnoreCase(method)) {
-                int contentLength = 0;
-                contentLength = Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
-
-                char[] bodyChars = new char[contentLength];
-
+                int contentLength = Integer.parseInt(headers.getOrDefault("Content-Length", "0"));
                 if (contentLength > 0) {
-                    in.read(bodyChars);
+                    bodyBytes = new byte[contentLength];
+                    int bytesRead = 0;
+                    while (bytesRead < contentLength) {
+                        int read = in.read(); // Читаем по байту (можно оптимизировать)
+                        if (read == -1) break;
+                        bodyBytes[bytesRead++] = (byte) read;
+                    }
                 }
-                String bodyText = new String(bodyChars);
-                body = new ByteArrayInputStream(bodyText.getBytes(StandardCharsets.UTF_8));
             }
 
-            Request request = new Request(method, path, headers, body);
+            Request request = new Request(method, path, headers,
+                    bodyBytes != null ? new ByteArrayInputStream(bodyBytes) : null);
 
             Handler handler = handlers.getOrDefault(method, new ConcurrentHashMap<>()).get(path);
 
@@ -90,7 +90,7 @@ public class Server {
                         "\r\n").getBytes());
                 out.flush();
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }
